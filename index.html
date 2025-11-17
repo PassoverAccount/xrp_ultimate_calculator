@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XRP Ultimate Calculator — Nov 2025 Edition</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg: #f9f9f9; --container: white; --text: #333; --accent: #0066cc; }
+        .dark { --bg: #121212; --container: #1e1e1e; --text: #e0e0e0; --accent: #3399ff; }
+        body { font-family: Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; transition: background 0.3s; }
+        .container { max-width: 960px; margin: 0 auto; background: var(--container); padding: 30px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
+        h1 { text-align: center; color: var(--accent); }
+        .mode-tabs { display: flex; margin: 20px 0; gap: 10px; }
+        .mode-tabs button { flex: 1; padding: 12px; background: #444; color: white; border: none; cursor: pointer; border-radius: 6px; }
+        .mode-tabs button.active { background: var(--accent); }
+        .section { display: none; }
+        .section.active { display: block; }
+        .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin: 20px 0; }
+        label { font-weight: bold; margin-top: 10px; display: block; }
+        input[type=number], select { width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #666; background: var(--bg); color: var(--text); box-sizing: border-box; }
+        button { background: var(--accent); color: white; border: none; padding: 10px 16px; margin: 8px 4px 0 0; border-radius: 5px; cursor: pointer; }
+        button:hover { opacity: 0.9; }
+        button.small { padding: 6px 12px; font-size: 0.9em; }
+        #result { margin: 30px 0; padding: 20px; background: rgba(0,102,204,0.1); border-radius: 8px; text-align: center; font-size: 28px; }
+        .dark #result { background: rgba(51,153,255,0.2); }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #555; padding: 10px; text-align: center; }
+        th { background: var(--accent); color: white; }
+        canvas { max-width: 100%; margin: 20px 0; background: var(--container); padding: 15px; border-radius: 8px; }
+        .section-title { margin-top: 40px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>XRP Ultimate Calculator — Nov 2025</h1>
+    <p style="text-align:center;">Long-term Valuation Model ↔ Shane Ellis Supply-Shock Simulator<br>One file • Works offline • Dark mode • Charts • Saves scenarios</p>
+    <div style="text-align:right;margin-bottom:10px;">
+        <button onclick="toggleDark()">Dark Mode</button>
+        <button onclick="resetForm()">Reset All</button>
+    </div>
+    <div class="mode-tabs">
+        <button class="active" onclick="switchMode('valuation')">Long-term Valuation</button>
+        <button onclick="switchMode('shock')">Supply-Shock Simulator</button>
+    </div>
+    <div id="valuation" class="section active">
+        <div class="controls">
+            <div>
+                <label>Daily tx volume (trillions USD)</label>
+                <input type="number" step="0.1" id="daily_tx_trillions" value="8">
+                <label>Avg holding time β (days)</label>
+                <input type="number" step="0.1" id="beta_days" value="2.5">
+                <label>SoV capture (trillions USD)</label>
+                <input type="number" step="0.1" id="sov_trillions" value="2">
+                <label>Circulating supply (billions) ≈60.18</label>
+                <input type="number" step="0.01" id="supply_billions" value="60.18">
+            </div>
+            <div>
+                <label>Years to horizon</label>
+                <input type="number" step="1" min="1" id="years" value="5">
+                <label>Annual discount rate (%)</label>
+                <input type="number" step="1" id="discount_rate" value="18">
+                <label>Success probability (0-1)</label>
+                <input type="number" step="0.01" min="0" max="1" id="success_prob" value="0.4">
+                <label>XRP market share (0-1)</label>
+                <input type="number" step="0.01" min="0" max="1" id="market_share" value="0.12">
+                <label>Current price ($) – for upside calc</label>
+                <input type="number" step="0.01" id="current_price_val" value="2.25">
+                <label style="display:flex;align-items:center;margin-top:20px;">
+                    <input type="checkbox" id="multi_period" checked> Use multi-period linear ramp model
+                </label>
+            </div>
+        </div>
+    </div>
+    <div id="shock" class="section">
+        <div class="controls">
+            <div>
+                <label>Starting price ($)</label>
+                <input type="number" step="0.01" id="start_price" value="2.25">
+                <label>Exchange liquid supply (B XRP) – est Nov 2025 ≈5.5</label>
+                <input type="number" step="0.1" id="liquid_supply" value="5.5">
+                <label>Daily inflow ($ millions)</label>
+                <input type="number" step="10" id="daily_inflow" value="120">
+                <label>Seller elasticity (0 = no sellers, 1.0 = realistic)</label>
+                <input type="number" step="0.05" min="0" max="2" id="seller_factor" value="0.8">
+                <label>Days to simulate (1-365)</label>
+                <input type="number" step="1" min="1" max="365" id="shock_days" value="60">
+            </div>
+            <div>
+                <p><small>Presets:</small></p>
+                <button class="small" onclick="document.getElementById('daily_inflow').value=250;calculate()">ETF Day-1 ($250M)</button>
+                <button class="small" onclick="document.getElementById('daily_inflow').value=120;calculate()">Realistic ($120M)</button>
+                <button class="small" onclick="document.getElementById('daily_inflow').value=400;calculate()">Bull ($400M+)</button>
+                <button class="small" onclick="document.getElementById('seller_factor').value=0.3;calculate()">Low Sellers (Aggressive)</button>
+                <button class="small" onclick="document.getElementById('seller_factor').value=1.2;calculate()">High Sellers (Conservative)</button>
+            </div>
+        </div>
+    </div>
+    <button onclick="calculate()" style="font-size:18px;padding:15px 40px;">CALCULATE</button>
+    <div id="result">Click calculate – result appears here</div>
+    <div id="details"></div>
+    <div id="chartContainer" style="display:none;"><canvas id="priceChart"></canvas></div>
+    <div class="section-title">
+        <button onclick="saveScenario()">Save Current Scenario</button>
+        <button onclick="exportCSV()">Export All → CSV</button>
+        <button onclick="showComparison()">Show / Refresh Saved Scenarios</button>
+        <button onclick="clearScenarios()">Clear All Saved</button>
+        <div id="comparison"></div>
+    </div>
+</div>
+<script>
+    let chartInstance = null;
+    let currentMode = 'valuation';
+
+    // Dark mode persistence
+    function toggleDark() {
+        document.body.classList.toggle('dark');
+        localStorage.setItem('darkMode', document.body.classList.contains('dark'));
+    }
+    if (localStorage.getItem('darkMode') === 'true') document.body.classList.add('dark');
+
+    function switchMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        document.getElementById(mode).classList.add('active');
+        document.querySelectorAll('.mode-tabs button').forEach(b => b.classList.remove('active'));
+        document.querySelector(`button[onclick="switchMode('${mode}')"]`).classList.add('active');
+        calculate();
+    }
+
+    function getValuationInputs() {
+        return {
+            daily_tx_trillions: parseFloat(document.getElementById('daily_tx_trillions').value) || 0,
+            beta_days: parseFloat(document.getElementById('beta_days').value) || 0,
+            sov_trillions: parseFloat(document.getElementById('sov_trillions').value) || 0,
+            supply_billions: parseFloat(document.getElementById('supply_billions').value) || 60,
+            years: parseInt(document.getElementById('years').value) || 5,
+            discount_rate: parseFloat(document.getElementById('discount_rate').value) || 20,
+            success_prob: parseFloat(document.getElementById('success_prob').value) || 0.3,
+            market_share: parseFloat(document.getElementById('market_share').value) || 0.1,
+            multi_period: document.getElementById('multi_period').checked,
+            current_price: parseFloat(document.getElementById('current_price_val').value) || null
+        };
+    }
+
+    function getShockInputs() {
+        return {
+            start_price: parseFloat(document.getElementById('start_price').value) || 2.25,
+            liquid_supply: parseFloat(document.getElementById('liquid_supply').value) || 5.5,
+            daily_inflow: parseFloat(document.getElementById('daily_inflow').value) || 120,
+            seller_factor: parseFloat(document.getElementById('seller_factor').value) || 0.8,
+            shock_days: parseInt(document.getElementById('shock_days').value) || 60
+        };
+    }
+
+    function calculate() {
+        document.getElementById('details').innerHTML = '';
+        document.getElementById('chartContainer').style.display = 'none';
+        if (chartInstance) chartInstance.destroy();
+        if (currentMode === 'valuation') calculateValuation();
+        else calculateShock();
+    }
+
+    function calculateValuation() {
+        const i = getValuationInputs();
+        const daily_tx_usd = i.daily_tx_trillions * 1e12 * i.market_share;
+        const sov_usd = i.sov_trillions * 1e12;
+        const supply = i.supply_billions * 1e9;
+        let price = 0;
+        let yearlyData = [];
+        if (i.multi_period) {
+            let sumDiscounted = 0;
+            for (let y = 1; y <= i.years; y++) {
+                const growth = y / i.years;
+                const util = daily_tx_usd * growth * i.beta_days;
+                const sov = sov_usd * growth;
+                const mc = util + sov;
+                const future_price = mc / supply;
+                const discounted = future_price / Math.pow(1 + i.discount_rate / 100, y);
+                sumDiscounted += discounted;
+                yearlyData.push({year: y, growth, future_price, discounted});
+            }
+            price = (sumDiscounted / i.years) * i.success_prob;
+        } else {
+            const util = daily_tx_usd * i.beta_days;
+            const mc = util + sov_usd;
+            const future_price = mc / supply;
+            price = (future_price / Math.pow(1 + i.discount_rate / 100, i.years)) * i.success_prob;
+        }
+        let html = `<strong>Fair Value: $${price.toFixed(2)}</strong><br><small>${i.multi_period ? 'Multi-period' : 'Single-period'} model</small>`;
+        if (i.current_price) {
+            const upside = ((price / i.current_price) - 1) * 100;
+            html += `<br>Upside from $${i.current_price}: <strong style="color:${upside > 0 ? 'green' : 'red'}">${upside.toFixed(1)}%</strong>`;
+        }
+        document.getElementById('result').innerHTML = html;
+        if (i.multi_period && yearlyData.length) {
+            let table = `<div class="section-title"><h2>Yearly Breakdown</h2><table><tr><th>Year</th><th>Growth %</th><th>Future Price $</th><th>PV $</th></tr>`;
+            yearlyData.forEach(d => {
+                table += `<tr><td>${d.year}</td><td>${(d.growth*100).toFixed(0)}%</td><td>${d.future_price.toFixed(2)}</td><td>${d.discounted.toFixed(2)}</td></tr>`;
+            });
+            table += `</table></div>`;
+            document.getElementById('details').innerHTML = table;
+            document.getElementById('chartContainer').style.display = 'block';
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: yearlyData.map(d => `Year ${d.year}`),
+                    datasets: [
+                        { label: 'Future Price ($)', data: yearlyData.map(d => d.future_price), borderColor: '#00cc00', yAxisID: 'y' },
+                        { label: 'PV Contribution ($)', data: yearlyData.map(d => d.discounted), type: 'bar', backgroundColor: '#3399ff88', yAxisID: 'y1' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { position: 'left', title: { display: true, text: 'Future Price ($)' } },
+                        y1: { position: 'right', title: { display: true, text: 'PV ($)' }, grid: { drawOnChartArea: false } }
+                    }
+                }
+            });
+        }
+    }
+
+    function calculateShock() {
+        const i = getShockInputs();
+        const initialLiquid = i.liquid_supply * 1e9;
+        let liquid = initialLiquid;
+        let price = i.start_price;
+        const history = [{day: 0, price: price, liquid: i.liquid_supply}];
+        for (let d = 1; d <= i.shock_days; d++) {
+            const dailyBuyXrp = (i.daily_inflow * 1e6) / price;
+            liquid -= dailyBuyXrp;
+            if (liquid < 1e8) liquid = 1e8; // prevent infinity
+            let newPrice = i.start_price * (initialLiquid / liquid);
+            // sellers refill based on price increase
+            const priceMultiple = newPrice / price;
+            const sellerRefill = dailyBuyXrp * i.seller_factor * (priceMultiple - 1);
+            liquid += sellerRefill;
+            price = i.start_price * (initialLiquid / liquid);
+            history.push({day: d, price, liquid: liquid / 1e9});
+        }
+        const upside = ((price / i.start_price) - 1) * 100;
+        document.getElementById('result').innerHTML = `
+            <strong>Projected price in ${i.shock_days} days: $${price.toFixed(2)}</strong><br>
+            <span style="color:${upside>0?'green':'red'}">↑ ${upside.toFixed(1)}% from $${i.start_price}</span><br>
+            <small>Daily inflow $${i.daily_inflow}M • Seller elasticity ${i.seller_factor}</small>
+        `;
+        document.getElementById('chartContainer').style.display = 'block';
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        chartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: history.map(h => `Day ${h.day}`),
+                datasets: [
+                    { label: 'XRP Price ($)', data: history.map(h => h.price.toFixed(2)), borderColor: '#00cc00', fill: false },
+                    { label: 'Exchange Liquidity (B XRP)', data: history.map(h => h.liquid.toFixed(2)), borderColor: '#cc0000', yAxisID: 'y1' }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { position: 'left', title: { display: true, text: 'Price ($)' } },
+                    y1: { position: 'right', title: { display: true, text: 'Liquidity (B)' }, grid: { drawOnChartArea: false } }
+                }
+            }
+        });
+    }
+
+    // Scenario saving (saves mode + all inputs)
+    function saveScenario() {
+        const name = prompt('Scenario name?', currentMode + ' scenario ' + (JSON.parse(localStorage.getItem('xrpScenarios')||'[]').length + 1));
+        if (!name) return;
+        const scenario = {
+            name,
+            mode: currentMode,
+            ... (currentMode === 'valuation' ? getValuationInputs() : getShockInputs()),
+            calculated_price: parseFloat(document.querySelector('#result strong').textContent.replace(/[^0-9.]/g,'')) || 0,
+            date: new Date().toISOString().split('T')[0]
+        };
+        let scenarios = JSON.parse(localStorage.getItem('xrpScenarios')||'[]');
+        scenarios.push(scenario);
+        localStorage.setItem('xrpScenarios', JSON.stringify(scenarios));
+        showComparison();
+    }
+
+    function showComparison() {
+        let scenarios = JSON.parse(localStorage.getItem('xrpScenarios')||'[]');
+        if (scenarios.length === 0) {
+            document.getElementById('comparison').innerHTML = '<p>No saved scenarios yet.</p>';
+            return;
+        }
+        let html = `<h2>Saved Scenarios (${scenarios.length})</h2><table><tr><th>Name</th><th>Mode</th><th>Key Params</th><th>Result $</th><th></th></tr>`;
+        scenarios.forEach((s, idx) => {
+            let params = s.mode === 'valuation' ? `${s.daily_tx_trillions}T vol, ${s.market_share*100}% share` : `${s.daily_inflow}M/day, ${s.seller_factor} elastic`;
+            html += `<tr>
+                <td>${s.name}</td>
+                <td>${s.mode}</td>
+                <td>${params}</td>
+                <td><strong>$${s.calculated_price.toFixed(2)}</strong></td>
+                <td><button onclick="loadScenario(${idx})">Load</button> <button onclick="deleteScenario(${idx})">Del</button></td>
+            </tr>`;
+        });
+        html += '</table>';
+        document.getElementById('comparison').innerHTML = html;
+    }
+
+    function loadScenario(idx) {
+        let scenarios = JSON.parse(localStorage.getItem('xrpScenarios'));
+        const s = scenarios[idx];
+        switchMode(s.mode);
+        Object.keys(s).forEach(k => {
+            if (k !== 'mode' && k !== 'name' && k !== 'calculated_price' && k !== 'date' && document.getElementById(k)) {
+                if (k === 'multi_period') document.getElementById(k).checked = s[k];
+                else document.getElementById(k).value = s[k];
+            }
+        });
+        calculate();
+    }
+
+    function deleteScenario(idx) {
+        let scenarios = JSON.parse(localStorage.getItem('xrpScenarios'));
+        scenarios.splice(idx,1);
+        localStorage.setItem('xrpScenarios', JSON.stringify(scenarios));
+        showComparison();
+    }
+
+    function exportCSV() {
+        let scenarios = JSON.parse(localStorage.getItem('xrpScenarios')||'[]');
+        if (scenarios.length === 0) return alert('Nothing to export');
+        let csv = 'Name,Mode,Result,Date\n';
+        scenarios.forEach(s => csv += `${s.name},${s.mode},${s.calculated_price},${s.date}\n`);
+        const blob = new Blob([csv], {type: 'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'xrp_scenarios.csv';
+        a.click();
+    }
+
+    function clearScenarios() {
+        if (confirm('Delete all saved scenarios?')) {
+            localStorage.removeItem('xrpScenarios');
+            showComparison();
+        }
+    }
+
+    // Reset form (added for completeness, as original calls it but doesn't define it)
+    function resetForm() {
+        location.reload();
+    }
+
+    // initial load
+    calculate();
+    showComparison();
+</script>
+</body>
+</html>
